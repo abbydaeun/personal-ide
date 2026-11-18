@@ -1,0 +1,103 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:" />
+  <title>Claude IDE</title>
+  <link rel="stylesheet" href="../node_modules/@xterm/xterm/css/xterm.css" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Shared crayon texture: wobbly edges + paper-grain speckles. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="crayon" x="-15%" y="-15%" width="130%" height="130%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="4" result="wobble"/>
+      <feDisplacementMap in="SourceGraphic" in2="wobble" scale="3.5" xChannelSelector="R" yChannelSelector="G" result="rough"/>
+      <feTurbulence type="fractalNoise" baseFrequency="1.9" numOctaves="1" seed="9" result="grain"/>
+      <feColorMatrix in="grain" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 -2.2 1.25" result="flecks"/>
+      <feComposite in="flecks" in2="rough" operator="in" result="paperFlecks"/>
+      <feMerge><feMergeNode in="rough"/><feMergeNode in="paperFlecks"/></feMerge>
+    </filter>
+  </svg>
+  <header id="topbar">
+    <button id="home-btn" class="icon-btn" title="Projects (⌘⇧H)">
+      <svg viewBox="0 0 16 16" width="15" height="15"><path d="M2 7.2 8 2l6 5.2V14H9.6v-4H6.4v4H2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+    </button>
+    <nav id="tabstrip"></nav>
+    <div id="topdeco" aria-hidden="true"></div>
+    <div id="ctxtop" hidden></div>
+    <div id="ctxline" hidden><i></i></div>
+  </header>
+
+  <main id="main">
+    <section id="home" class="view">
+      <div id="doodles" aria-hidden="true"></div>
+      <div class="home-inner">
+        <div class="home-head">
+          <div>
+            <h1>Projects</h1>
+            <p class="sub"><kbd>⌘T</kbd> new terminal · <kbd>⌘⇧T</kbd> new Claude tab</p>
+          </div>
+          <div class="home-actions">
+            <input id="search" type="search" placeholder="Filter projects…" />
+            <button id="settings-btn" class="btn ghost" title="Settings">Settings</button>
+            <button id="add-btn" class="btn primary">Add folder</button>
+          </div>
+        </div>
+        <div id="project-grid" class="grid"></div>
+      </div>
+    </section>
+    <section id="terminals" class="view" hidden><aside id="filetree" hidden></aside></section>
+  </main>
+
+  <footer id="statusbar"></footer>
+
+  <dialog id="settings-dlg">
+    <form method="dialog">
+      <div class="dlg-doodle doodle" data-doodle="frog"></div>
+      <h3>Settings</h3>
+      <label>Auto-compact threshold (tokens)
+        <input id="set-threshold" type="number" min="10000" step="1000" placeholder="auto" />
+        <small id="set-threshold-hint"></small>
+      </label>
+      <label>Threshold for 1M-context sessions
+        <input id="set-large" type="number" min="100000" step="1000" placeholder="auto" />
+      </label>
+      <label>Terminal font size
+        <input id="set-font" type="number" min="9" max="24" />
+      </label>
+      <label class="check"><input id="set-notify" type="checkbox" />
+        <span>Notify me when a Claude needs my answer or finishes<small>Only for tabs you're not looking at. The Dock icon also shows how many are waiting.</small></span>
+      </label>
+      <div class="dlg-actions">
+        <button value="cancel" class="btn ghost">Cancel</button>
+        <button id="settings-save" value="save" class="btn primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="history-dlg">
+    <div class="dlg-doodle doodle" data-doodle="chick"></div>
+    <h3>Claude History</h3>
+    <p class="dlg-sub">Folders you've used Claude Code in that aren't projects here yet.</p>
+    <div id="discover" class="discover-list"></div>
+    <div class="dlg-actions"><button id="history-close" class="btn">Done</button></div>
+  </dialog>
+
+  <dialog id="quickopen">
+    <div class="qo-head"><span class="file-ico"></span> Open file in <b id="qo-title"></b></div>
+    <input id="qo-input" type="text" placeholder="train.py" autocomplete="off" spellcheck="false" />
+    <div id="qo-list"></div>
+    <div class="qo-foot">↑↓ to choose · Enter to open · Esc to close</div>
+  </dialog>
+
+  <script src="../node_modules/@xterm/xterm/lib/xterm.js"></script>
+  <script src="../node_modules/@xterm/addon-fit/lib/addon-fit.js"></script>
+  <script src="../node_modules/@xterm/addon-web-links/lib/addon-web-links.js"></script>
+  <script src="bgfilter.js"></script>
+  <script src="doodles.js"></script>
+  <script src="vendor/codemirror.js"></script>
+  <script src="app.js"></script>
+  <script src="files.js"></script>
+</body>
+</html>
