@@ -12,7 +12,96 @@ module.exports = function smoke(win, dir) {
   const log = (...a) => fs.appendFileSync(path.join(dir, 'log.txt'), a.join(' ') + '\n');
   wc.on('console-message', (_e, level, msg) => log('console', level, msg));
 
+
+  // IDE_DEMO=1: stage a clean, made-up scene for README screenshots (no personal paths or prompts).
+  // Projects live under IDE_DEMO_ROOT; the Claude tab shows an example transcript drawn straight into xterm.
+  async function demo() {
+    const root = process.env.IDE_DEMO_ROOT;
+    const W = path.join(root, 'weather-app'), N = path.join(root, 'notes-site');
+    const files = {
+      'src/app.py': 'from flask import Flask, jsonify\nfrom .weather import fetch_current, fetch_daily\nfrom .cache import cache\n\napp = Flask(__name__)\n\n\n@app.get("/weather/<city>")\ndef weather(city):\n    """Current conditions for a city."""\n    return jsonify(fetch_current(city))\n\n\n@app.get("/health")\ndef health():\n    return {"ok": True}\n',
+      'src/weather.py': 'import requests\n\nAPI = "https://api.example.com/v1"\n\n\ndef fetch_current(city):\n    return requests.get(f"{API}/current", params={"q": city}).json()\n\n\ndef fetch_daily(city, days=5):\n    return requests.get(f"{API}/daily", params={"q": city, "days": days}).json()\n',
+      'src/cache.py': 'import time\nfrom functools import wraps\n',
+      'tests/test_app.py': 'def test_health(client):\n    assert client.get("/health").json == {"ok": True}\n',
+      'README.md': '# Weather App\n\nA tiny Flask API for current weather and forecasts.\n',
+      'config.yaml': 'cache_ttl: 600\ndefault_city: Seattle\n',
+      'requirements.txt': 'flask\nrequests\n', 'data/cities.csv': 'city,lat,lon\nSeattle,47.6,-122.3\n',
+      '.env': 'WEATHER_API_KEY=example\n', 'pyproject.toml': '[project]\nname = "weather-app"\n',
+    };
+    for (const [rel, text] of Object.entries(files)) { fs.mkdirSync(path.dirname(path.join(W, rel)), { recursive: true }); fs.writeFileSync(path.join(W, rel), text); }
+    fs.mkdirSync(N, { recursive: true }); fs.writeFileSync(path.join(N, 'index.html'), '<h1>Notes</h1>\n');
+
+    for (const p of [W, N]) await js(`window.ide.projects.add(${JSON.stringify(p)})`);
+    await js('refreshProjects()'); await wait(1500);
+    const [pidW, pidN] = await js('S.projects.map(p => p.id)');
+    await shot('demo-home');
+
+    // Tabs: weather-app gets a shell + a Claude tab, notes-site gets a shell.
+    await js(`openTerminal(${JSON.stringify(pidW)}).then(() => null)`); await wait(900);
+    await js(`openTerminal(${JSON.stringify(pidN)}).then(() => null)`); await wait(900);
+    await js(`activate(S.tabs[0].id); null`); await wait(300);
+    await js(`window.ide.pty.write(S.activeId, ${JSON.stringify(process.env.IDE_SMOKE_FAKE_CLAUDE + ' 600\r')})`);
+    await wait(1500);
+    const tdir = path.join(require('os').homedir(), '.claude', 'projects', W.replace(/[^a-zA-Z0-9]/g, '-'));
+    fs.mkdirSync(tdir, { recursive: true });
+    const usage = { input_tokens: 6, cache_creation_input_tokens: 3100, cache_read_input_tokens: 84000, output_tokens: 1200 };
+    fs.writeFileSync(path.join(tdir, 'demo-session.jsonl'), JSON.stringify({ type: 'assistant', isSidechain: false, effort: 'high', message: { model: 'claude-opus-5-5', usage } }) + '\n');
+    await wait(3500); // let status polling detect Claude + read the transcript
+
+    // Clean screens: a neutral prompt in shell tabs, an example Claude session in the Claude tab.
+    const ESC = '\x1b';
+    const dim = (t) => `${ESC}[90m${t}${ESC}[39m`, orange = (t) => `${ESC}[38;2;217;119;87m${t}${ESC}[39m`, bold = (t) => `${ESC}[1m${t}${ESC}[22m`;
+    const claudeScreen = [
+      '',
+      `${ESC}[100m > add a /forecast/<city> endpoint for the next 5 days and cache it for 10 min ${ESC}[49m`,
+      '',
+      `${orange('⏺')} I'll add a cached forecast route next to the existing weather endpoint.`,
+      '',
+      `${orange('⏺')} ${bold('Update')}(src/app.py)`,
+      `  ${dim('⎿')}  Updated src/app.py with 6 additions`,
+      `      ${ESC}[42m 14 +@app.get("/forecast/<city>")        ${ESC}[49m`,
+      `      ${ESC}[42m 15 +@cache(ttl=600)                     ${ESC}[49m`,
+      `      ${ESC}[42m 16 +def forecast(city):                 ${ESC}[49m`,
+      `      ${ESC}[42m 18 +    return jsonify(fetch_daily(city, days=5))${ESC}[49m`,
+      '',
+      `${orange('⏺')} ${bold('Bash')}(pytest -q)`,
+      `  ${dim('⎿')}  ${ESC}[32m14 passed${ESC}[39m in 0.91s`,
+      '',
+      `${orange('✻')} Writing summary… ${dim('(4s · esc to interrupt)')}`,
+      '',
+    ].join('\r\n');
+    await js(`(() => {
+      const prompt = (t, name) => { t.term.reset(); t.term.write('\\x1b[1m' + name + ' %\\x1b[22m '); };
+      const [cl, notes] = S.tabs;
+      prompt(notes, 'notes-site');
+      cl.term.reset(); cl.bgFilter = createBackgroundFilter(); cl.term.write(cl.bgFilter(${JSON.stringify(claudeScreen)}));
+      cl.lastData = Date.now();
+    })(); null`);
+    await wait(600);
+    await js(`evalAgent(S.tabs[0]); renderTabs(); null`);
+
+    // Files: open the tree, expand src, open app.py next to the Claude tab (split).
+    await js(`S.collapsed.add(${JSON.stringify(pidN)}); activate(S.tabs[0].id); S.treeOpen[${JSON.stringify(pidW)}] = true; null`);
+    await js(`(async () => { const st = treeState(${JSON.stringify(pidW)}); await loadDir(${JSON.stringify(pidW)}, ''); st.open.add('src'); await loadDir(${JSON.stringify(pidW)}, 'src'); })()`);
+    await js(`openFile(${JSON.stringify(pidW)}, 'src/app.py', { focus: false }).then(() => null)`); await wait(900);
+    await js(`activate(S.tabs[0].id); S.collapsed.add(${JSON.stringify(pidN)}); renderTabs(); null`); await wait(400);
+
+    // "Claude" edits app.py on disk -> live reload with the changed lines glowing.
+    const appPy = fs.readFileSync(path.join(W, 'src/app.py'), 'utf8').replace('@app.get("/health")',
+      '@app.get("/forecast/<city>")\n@cache(ttl=600)\ndef forecast(city):\n    """Next five days, cached for 10 minutes."""\n    return jsonify(fetch_daily(city, days=5))\n\n\n@app.get("/health")');
+    fs.writeFileSync(path.join(W, 'src/app.py'), appPy);
+    await wait(1500);
+    await js(`(() => { const t = S.tabs.find(x => x.claude); t.agent = null; evalAgent(t); renderTabs(); renderStatus(); })(); null`);
+    log('demo claude tab status:', await js(`S.tabs.find(x => x.claude)?.agent`));
+    await wait(250);
+    await shot('demo-main');
+
+    fs.rmSync(tdir, { recursive: true, force: true });
+    log('demo done');
+  }
+
   wc.once('did-finish-load', async () => {
+    if (process.env.IDE_DEMO) { try { await demo(); } catch (e) { log('ERROR', e.stack || e); } return app.quit(); }
     try {
       const projects = (process.env.IDE_SMOKE_PROJECTS || '').split(':').filter(Boolean);
       for (const p of projects) await js(`window.ide.projects.add(${JSON.stringify(p)})`);
@@ -161,6 +250,8 @@ module.exports = function smoke(win, dir) {
         await shot('a3-done');
         await js(`activate(S.tabs[1].id); null`); await wait(200);
         log('agent 5 viewed    ->', await js(`S.tabs[1].agent`));
+        await js(`activate(S.tabs[0].id); S.tabs[1].term.reset(); S.tabs[1].agent = null; null`);
+        log('agent 6 top-of-screen ->', await draw('\r\n> fix it\r\n\r\n✻ Thinking… (2s · esc to interrupt)\r\n'));
       }
       // IDE_SMOKE_PROFILE=1: measure renderer+GPU CPU (Electron's own metrics) under variants.
       if (process.env.IDE_SMOKE_PROFILE) {

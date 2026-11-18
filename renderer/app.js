@@ -365,9 +365,14 @@ const AGENT_BADGE = {
   done: '<span class="agent done" title="Claude finished">✓</span>',
 };
 
-function screenTail(term, n = 22) {
-  const b = term.buffer.active, end = b.baseY + term.rows, out = [];
-  for (let y = Math.max(0, end - n); y < end; y++) out.push(b.getLine(y)?.translateToString(true) || '');
+// The last ~24 lines that actually have text. Claude's live area (spinner, prompts) sits right
+// under its output, which early in a session can be near the top of a tall terminal.
+function screenTail(term, n = 24) {
+  const b = term.buffer.active, end = b.baseY + term.rows;
+  let last = end - 1;
+  while (last > b.baseY && !(b.getLine(last)?.translateToString(true).trim())) last--;
+  const out = [];
+  for (let y = Math.max(0, last - n + 1); y <= last; y++) out.push(b.getLine(y)?.translateToString(true) || '');
   return out.join('\n');
 }
 

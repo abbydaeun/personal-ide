@@ -6,6 +6,17 @@ A cozy, crayon-styled desktop IDE for working with [Claude Code](https://docs.cl
 
 <p align="center"><img src="build/icon.png" width="160" alt="App icon: a crayon terminal prompt with a sun and a flower"></p>
 
+![Personal IDE: a file tree with crayon file icons, a Python file whose lines Claude just changed glowing green, and a Claude Code session side by side, with the context meter and model pills](docs/screenshot.png)
+
+<details>
+<summary>Home page</summary>
+
+![The projects home page with crayon doodles around project cards](docs/home.png)
+
+</details>
+
+<sub>Screenshots show a made-up demo project and an example session.</sub>
+
 ## Features
 
 **Projects & terminals**
